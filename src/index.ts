@@ -64,7 +64,7 @@ const DEFAULT_CONFIG = {
   ]
 };
 
-// 全局前置中间件：仅CF Worker环境自动注入配置，本地node跳过避免报错
+// 全局前置中间件：修复immutable headers报错
 app.use('*', async (c: Context, next) => {
   // 只有Cloudflare Worker运行时才执行注入逻辑
   if (runtime !== "workerd") {
@@ -86,10 +86,14 @@ app.use('*', async (c: Context, next) => {
     ]
   };
 
-  // 客户端未携带x-portkey-config则自动塞入header
-  if (!c.req.header("x-portkey-config")) {
-    c.req.raw.headers.set("x-portkey-config", JSON.stringify(finalConfig));
+  // 复制headers为可写实例
+  const newHeaders = new Headers(c.req.raw.headers);
+  if (!newHeaders.has("x-portkey-config")) {
+    newHeaders.set("x-portkey-config", JSON.stringify(finalConfig));
   }
+  // 构造新request替换原始只读request
+  c.req.raw = new Request(c.req.raw, { headers: newHeaders });
+
   await next();
 });
 // ==========================================================================
