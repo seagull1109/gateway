@@ -63,7 +63,7 @@ const DEFAULT_CONFIG = {
       provider: "openrouter",
       api_key: "",
       override_params: {
-        model: "openai/gpt-oss-120b:free"
+        model: "poolside/laguna-m.1:free"
       }
     },
     {
