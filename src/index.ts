@@ -49,7 +49,7 @@ const runtime = getRuntimeKey();
 // ===================== 新增：内置全局默认 Portkey 配置 =====================
 // 降级顺序：nemotron -> gpt-oss -> gemini-pro
 const DEFAULT_CONFIG = {
-  retry: { count: 3 },
+  retry: { attempts: 3 },
   strategy: { mode: "fallback" },
   targets: [
     {
