@@ -47,7 +47,7 @@ const app = new Hono();
 const runtime = getRuntimeKey();
 
 // ===================== 新增：内置全局默认 Portkey 配置 =====================
-// 降级顺序：nemotron -> gpt-oss -> gemini-pro
+
 const DEFAULT_CONFIG = {
   retry: { attempts: 3 },
   strategy: { mode: "fallback" },
@@ -63,13 +63,13 @@ const DEFAULT_CONFIG = {
       provider: "google",
       api_key: "",
       override_params: {
-        model: "gemini-2.5-pro"
+        model: "gemini-2.5-flash-lite"
       }
     },
     {
-      provider: "google",
+      provider: "openrouter",
       api_key: "",
-      override_params: { model: "gemini-2.5-flash-lite" }
+      override_params: { model: "openrouter/free" }
     }
   ]
 };
@@ -95,7 +95,7 @@ app.use('*', async (c: Context, next) => {
       },
       {
         ...DEFAULT_CONFIG.targets[2],
-        api_key: c.env.GEMINI_KEY
+        api_key: c.env.OPENROUTER_KEY
       }
     ]
   };
