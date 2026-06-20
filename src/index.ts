@@ -53,23 +53,23 @@ const DEFAULT_CONFIG = {
   strategy: { mode: "fallback" },
   targets: [
     {
-      provider: "openrouter",
+      provider: "google",
       api_key: "",
       override_params: {
-        model: "nvidia/nemotron-3-ultra-550b-a55b:free"
-      }
-    },
-    {
-      provider: "openrouter",
-      api_key: "",
-      override_params: {
-        model: "openrouter/free"
+        model: "gemini-3.5-flash"
       }
     },
     {
       provider: "google",
       api_key: "",
-      override_params: { model: "gemini-pro" }
+      override_params: {
+        model: "gemini-2.5-pro"
+      }
+    },
+    {
+      provider: "google",
+      api_key: "",
+      override_params: { model: "gemini-2.5-flash-lite" }
     }
   ]
 };
