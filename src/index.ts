@@ -63,7 +63,7 @@ const DEFAULT_CONFIG = {
       provider: "openrouter",
       api_key: "",
       override_params: {
-        model: "poolside/laguna-m.1:free"
+        model: "openrouter/free"
       }
     },
     {
