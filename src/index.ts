@@ -46,6 +46,54 @@ import { createCacheBackendsRedis } from './shared/services/cache';
 const app = new Hono();
 const runtime = getRuntimeKey();
 
+// ===================== 新增：内置全局默认 Portkey 配置 =====================
+// 主：OpenRouter，备用：Google Gemini
+const DEFAULT_CONFIG = {
+  retry: { count: 3 },
+  strategy: { mode: "fallback" },
+  targets: [
+    {
+      provider: "openrouter",
+      api_key: ""
+    },
+    {
+      provider: "google",
+      api_key: "",
+      override_params: { model: "gemini-pro" }
+    }
+  ]
+};
+
+// 全局前置中间件：仅CF Worker环境自动注入配置，本地node跳过避免报错
+app.use('*', async (c: Context, next) => {
+  // 只有Cloudflare Worker运行时才执行注入逻辑
+  if (runtime !== "workerd") {
+    return next();
+  }
+
+  // 填充后台配置的密钥
+  const finalConfig = {
+    ...DEFAULT_CONFIG,
+    targets: [
+      {
+        ...DEFAULT_CONFIG.targets[0],
+        api_key: c.env.OPENROUTER_KEY
+      },
+      {
+        ...DEFAULT_CONFIG.targets[1],
+        api_key: c.env.GEMINI_KEY
+      }
+    ]
+  };
+
+  // 客户端未携带x-portkey-config则自动塞入header
+  if (!c.req.header("x-portkey-config")) {
+    c.req.raw.headers.set("x-portkey-config", JSON.stringify(finalConfig));
+  }
+  await next();
+});
+// ==========================================================================
+
 if (runtime === 'node' && process.env.REDIS_CONNECTION_STRING) {
   createCacheBackendsRedis(process.env.REDIS_CONNECTION_STRING);
 }
