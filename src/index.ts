@@ -87,11 +87,11 @@ app.use('*', async (c: Context, next) => {
     targets: [
       {
         ...DEFAULT_CONFIG.targets[0],
-        api_key: c.c.env.GEMINI_KEY
+        api_key: c.env.GEMINI_KEY
       },
       {
         ...DEFAULT_CONFIG.targets[1],
-        api_key: c.c.env.GEMINI_KEY
+        api_key: c.env.GEMINI_KEY
       },
       {
         ...DEFAULT_CONFIG.targets[2],
