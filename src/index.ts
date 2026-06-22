@@ -19,6 +19,7 @@ import { memoryCache } from './middlewares/cache';
 // Handlers
 import { proxyHandler } from './handlers/proxyHandler';
 import { chatCompletionsHandler } from './handlers/chatCompletionsHandler';
+import { agentChatHandler } from './handlers/agentChatHandler';
 import { completionsHandler } from './handlers/completionsHandler';
 import { embeddingsHandler } from './handlers/embeddingsHandler';
 import { logHandler } from './middlewares/log';
@@ -211,6 +212,7 @@ app.post(
  * Handles requests by passing them to the chatCompletionsHandler.
  */
 app.post('/v1/chat/completions', requestValidator, chatCompletionsHandler);
+app.post('/v1/agent/chat', agentChatHandler); // agent loop, web_search tool
 
 /**
  * POST route for '/v1/completions'.
