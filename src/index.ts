@@ -57,14 +57,14 @@ const DEFAULT_CONFIG = {
       provider: "google",
       api_key: "",
       override_params: {
-        model: "gemini-3.5-flash"
+        model: "gemini-2.5-flash-lite"
       }
     },
     {
       provider: "google",
       api_key: "",
       override_params: {
-        model: "gemini-2.5-flash-lite"
+        model: "gemini-3.5-flash"
       }
     },
     {
