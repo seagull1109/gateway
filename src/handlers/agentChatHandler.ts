@@ -24,8 +24,11 @@ export async function agentChatHandler(c: any) {
 
   try {
     while (loopCount < MAX_LOOP) {
+      // 强制关闭 stream：这个 agent loop 需要拿到完整的 JSON 结果去判断
+      // tool_calls，不支持中途解析流式数据，不管外部客户端传了什么都覆盖掉。
       const resp = await runChatCompletion(c, {
         ...body,
+        stream: false,
         messages: currentMessages,
         tools: [WEB_SEARCH_TOOL],
         tool_choice: "auto"
@@ -87,6 +90,7 @@ export async function agentChatHandler(c: any) {
 
     const finalResp = await runChatCompletion(c, {
       ...body,
+      stream: false,
       messages: currentMessages,
       tool_choice: "none"
     })
