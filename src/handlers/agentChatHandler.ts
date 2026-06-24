@@ -6,6 +6,10 @@ import { searchFallback, summarizeSearchResult } from "../tools/search"
 
 const MAX_LOOP = 3
 const MAX_MESSAGES_CHARS = 60000
+// 之前没显式设置 max_tokens，遇到会深度思考的模型时，思考本身就可能把
+// token 预算耗光，导致最终可见的回复内容是空的。这里给一个足够大的默认值，
+// 如果调用方（Chatbox）自己传了 max_tokens 就用它的，没传才用这个兜底。
+const DEFAULT_MAX_TOKENS = 2048
 
 export async function agentChatHandler(c: any) {
   let body: any
@@ -24,11 +28,10 @@ export async function agentChatHandler(c: any) {
 
   try {
     while (loopCount < MAX_LOOP) {
-      // 强制关闭 stream：这个 agent loop 需要拿到完整的 JSON 结果去判断
-      // tool_calls，不支持中途解析流式数据，不管外部客户端传了什么都覆盖掉。
       const resp = await runChatCompletion(c, {
         ...body,
         stream: false,
+        max_tokens: body.max_tokens ?? DEFAULT_MAX_TOKENS,
         messages: currentMessages,
         tools: [WEB_SEARCH_TOOL],
         tool_choice: "auto"
@@ -91,6 +94,7 @@ export async function agentChatHandler(c: any) {
     const finalResp = await runChatCompletion(c, {
       ...body,
       stream: false,
+      max_tokens: body.max_tokens ?? DEFAULT_MAX_TOKENS,
       messages: currentMessages,
       tool_choice: "none"
     })
