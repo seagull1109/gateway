@@ -1,20 +1,16 @@
 // src/core/callGatewaySelf.ts
 //
-// 之前用全局 fetch() 自己调自己，在 workers.dev 域名上返回 404，
-// 在走 Route 绑定的自定义域名上返回 522 —— 这是 Cloudflare 对
-// "worker 自己调自己" 这种公网请求的限制，换哪个域名都绕不过去。
-//
-// 正确做法：用 Service Binding（在 wrangler.toml 里加 [[services]]）
-// 直接在 Cloudflare 内部转发给同一个 worker 脚本，
-// 这样既不走公网那层限制，又完整保留 requestValidator + 自定义中间件
-// + chatCompletionsHandler 这条完整链路。
+// 通过 Service Binding 调用内部专用的 completions 路径，
+// 注意：这里必须是 /v1/internal/chat/completions，不能再是 /v1/chat/completions，
+// 因为对外的 /v1/chat/completions 现在已经是 agentChatHandler 了，
+// 如果还打这个地址会变成自己无限调自己。
 
 export async function callGatewaySelf(c: any, payload: unknown) {
   const headers = new Headers(c.req.raw.headers)
   headers.delete("content-length")
   headers.delete("host")
 
-  const targetUrl = new URL("/v1/chat/completions", c.req.url).toString()
+  const targetUrl = new URL("/v1/internal/chat/completions", c.req.url).toString()
 
   const selfReq = new Request(targetUrl, {
     method: "POST",

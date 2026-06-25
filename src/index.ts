@@ -219,10 +219,25 @@ app.post(
 );
 
 /**
- * POST route for '/v1/chat/completions'.
- * Handles requests by passing them to the chatCompletionsHandler.
+ * 真正的 OpenAI 兼容 completions 逻辑，只给内部 self-call 用，不直接对外暴露。
  */
-app.post('/v1/chat/completions', requestValidator, chatCompletionsHandler);
+app.post(
+  '/v1/internal/chat/completions',
+  requestValidator,
+  chatCompletionsHandler
+);
+
+/**
+ * POST route for '/v1/chat/completions'.
+ * 对外的标准入口现在直接就是 agent 版本：自动支持 web_search 工具调用，
+ * 这样任何标准 OpenAI 客户端（NextChat、Chatbox 等）不用关心 /v1/agent/chat 这件事。
+ */
+app.post('/v1/chat/completions', requestValidator, agentChatHandler);
+
+/**
+ * POST route for '/v1/agent/chat'.
+ * 跟 /v1/chat/completions 是同一个 agentChatHandler，保留这条路径方便直接用 curl 调试。
+ */
 app.post('/v1/agent/chat', agentChatHandler); // agent loop, web_search tool
 
 /**
