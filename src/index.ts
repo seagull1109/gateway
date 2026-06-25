@@ -8,6 +8,7 @@ import { Context, Hono } from 'hono';
 import { prettyJSON } from 'hono/pretty-json';
 import { HTTPException } from 'hono/http-exception';
 import { compress } from 'hono/compress';
+import { cors } from 'hono/cors';
 import { getRuntimeKey } from 'hono/adapter';
 // import { env } from 'hono/adapter' // Have to set this up for multi-environment deployment
 
@@ -46,6 +47,15 @@ import { createCacheBackendsRedis } from './shared/services/cache';
 // Create a new Hono server instance
 const app = new Hono();
 const runtime = getRuntimeKey();
+
+// ===================== 新增：CORS，允许浏览器端客户端（NextChat 等）跨域调用 =====================
+// 必须放在很靠前的位置，确保 OPTIONS 预检请求能被尽早处理，不被后面其它中间件干扰。
+app.use('*', cors({
+  origin: '*',
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization', 'x-portkey-config'],
+}));
+// ====================================================================================
 
 // ===================== 新增：内置全局默认 Portkey 配置 =====================
 
