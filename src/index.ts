@@ -54,6 +54,13 @@ const DEFAULT_CONFIG = {
   strategy: { mode: "fallback" },
   targets: [
     {
+      provider: "deepseek",
+      api_key: "",
+      override_params: {
+        model: "deepseek-v4-flash"
+      }
+    },
+    {
       provider: "google",
       api_key: "",
       override_params: {
@@ -88,7 +95,7 @@ app.use('*', async (c: Context, next) => {
     targets: [
       {
         ...DEFAULT_CONFIG.targets[0],
-        api_key: c.env.GEMINI_KEY
+        api_key: c.env.DP_KEY
       },
       {
         ...DEFAULT_CONFIG.targets[1],
@@ -96,6 +103,10 @@ app.use('*', async (c: Context, next) => {
       },
       {
         ...DEFAULT_CONFIG.targets[2],
+        api_key: c.env.GEMINI_KEY
+      },
+      {
+        ...DEFAULT_CONFIG.targets[3],
         api_key: c.env.OPENROUTER_KEY
       }
     ]
