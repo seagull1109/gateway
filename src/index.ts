@@ -54,10 +54,10 @@ const DEFAULT_CONFIG = {
   strategy: { mode: "fallback" },
   targets: [
     {
-      provider: "google",
+      provider: "deepseek",
       api_key: "",
       override_params: {
-        model: "gemini-3.5-flash"
+        model: "deepseek-v4-flash"
       }
     },
     {
@@ -65,6 +65,13 @@ const DEFAULT_CONFIG = {
       api_key: "",
       override_params: {
         model: "gemini-2.5-flash-lite"
+      }
+    },
+    {
+      provider: "google",
+      api_key: "",
+      override_params: {
+        model: "gemini-3.5-flash"
       }
     },
     {
@@ -88,7 +95,7 @@ app.use('*', async (c: Context, next) => {
     targets: [
       {
         ...DEFAULT_CONFIG.targets[0],
-        api_key: c.env.GEMINI_KEY
+        api_key: c.env.DP_KEY
       },
       {
         ...DEFAULT_CONFIG.targets[1],
@@ -96,6 +103,10 @@ app.use('*', async (c: Context, next) => {
       },
       {
         ...DEFAULT_CONFIG.targets[2],
+        api_key: c.env.GEMINI_KEY
+      },
+      {
+        ...DEFAULT_CONFIG.targets[3],
         api_key: c.env.OPENROUTER_KEY
       }
     ]
