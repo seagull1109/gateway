@@ -6,10 +6,16 @@ import { searchFallback, summarizeSearchResult } from "../tools/search"
 
 const MAX_LOOP = 3
 const MAX_MESSAGES_CHARS = 60000
-// 之前没显式设置 max_tokens，遇到会深度思考的模型时，思考本身就可能把
-// token 预算耗光，导致最终可见的回复内容是空的。这里给一个足够大的默认值，
-// 如果调用方（Chatbox）自己传了 max_tokens 就用它的，没传才用这个兜底。
 const DEFAULT_MAX_TOKENS = 2048
+
+// 有些模型（比如 deepseek）默认偏保守，即便递了 web_search 工具，
+// 也倾向于直接用训练时记住的"我没有联网功能"话术敷衍过去，不会主动调用。
+// 加一条明确指令，提高它真正触发 tool_call 的概率。
+const SYSTEM_PROMPT = {
+  role: "system",
+  content:
+    "You have access to a web_search tool. When the user asks about current events, news, prices, exchange rates, or anything requiring up-to-date or real-time information, you MUST call the web_search tool instead of saying you cannot access the internet or lack real-time data. Only skip the tool for clearly static, well-established facts."
+}
 
 export async function agentChatHandler(c: any) {
   let body: any
@@ -24,6 +30,14 @@ export async function agentChatHandler(c: any) {
   }
 
   let currentMessages = [...body.messages]
+
+  // 只在用户/客户端没自己传 system 消息的情况下加，避免覆盖 Chatbox 等客户端
+  // 自己配置的 system prompt。
+  const hasSystemMessage = currentMessages.some((m: any) => m.role === "system")
+  if (!hasSystemMessage) {
+    currentMessages = [SYSTEM_PROMPT, ...currentMessages]
+  }
+
   let loopCount = 0
 
   try {
