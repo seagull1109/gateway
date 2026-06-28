@@ -8,9 +8,6 @@ const MAX_LOOP = 3
 const MAX_MESSAGES_CHARS = 60000
 const DEFAULT_MAX_TOKENS = 2048
 
-// 有些模型（比如 deepseek）默认偏保守，即便递了 web_search 工具，
-// 也倾向于直接用训练时记住的"我没有联网功能"话术敷衍过去，不会主动调用。
-// 加一条明确指令，提高它真正触发 tool_call 的概率。
 const SYSTEM_PROMPT = {
   role: "system",
   content:
@@ -29,14 +26,11 @@ export async function agentChatHandler(c: any) {
     return c.json({ error: "messages must be a non-empty array" }, 400)
   }
 
-  let currentMessages = [...body.messages]
-
-  // 只在用户/客户端没自己传 system 消息的情况下加，避免覆盖 Chatbox 等客户端
-  // 自己配置的 system prompt。
-  const hasSystemMessage = currentMessages.some((m: any) => m.role === "system")
-  if (!hasSystemMessage) {
-    currentMessages = [SYSTEM_PROMPT, ...currentMessages]
-  }
+  // 不再判断"是不是已经有 system 消息"——像 NextChat 这类客户端经常自己会带一条
+  // system 消息（默认人设、历史压缩摘要等），如果命中这种情况，按"有就跳过"的逻辑，
+  // 我们这条"必须调用 web_search"的提示就完全没生效。直接追加在最前面，
+  // 跟原有的 system 消息共存，绝大多数模型/接口都能正确处理多条 system 消息。
+  let currentMessages = [SYSTEM_PROMPT, ...body.messages]
 
   let loopCount = 0
 
