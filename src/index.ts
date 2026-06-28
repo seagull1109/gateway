@@ -49,7 +49,6 @@ const app = new Hono();
 const runtime = getRuntimeKey();
 
 // ===================== 新增：CORS，允许浏览器端客户端（NextChat 等）跨域调用 =====================
-// 必须放在很靠前的位置，确保 OPTIONS 预检请求能被尽早处理，不被后面其它中间件干扰。
 app.use('*', cors({
   origin: '*',
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -57,69 +56,59 @@ app.use('*', cors({
 }));
 // ====================================================================================
 
-// ===================== 新增：内置全局默认 Portkey 配置 =====================
+// ===================== 新增：内置全局默认 Portkey 配置（支持两套 fallback 顺序） =====================
+// DEFAULT_TARGETS：日常调试用，deepseek 优先（速度快、便宜，但 function calling 不够稳）。
+// SEARCH_TARGETS：需要可靠搜索时用，Gemini 优先（之前测试中工具调用一直稳定触发）。
+// 在 NextChat（或其他客户端）里把"模型"切换成 gemini-search，就会自动用这套；
+// 其他任何 model 值（包括 deepseek）都走 DEFAULT_TARGETS，行为跟现在完全一样。
 
-const DEFAULT_CONFIG = {
-  retry: { attempts: 3 },
-  strategy: { mode: "fallback" },
-  targets: [
-    {
-      provider: "deepseek",
-      api_key: "",
-      override_params: {
-        model: "deepseek-v4-flash"
-      }
-    },
-    {
-      provider: "google",
-      api_key: "",
-      override_params: {
-        model: "gemini-2.5-flash-lite"
-      }
-    },
-    {
-      provider: "google",
-      api_key: "",
-      override_params: {
-        model: "gemini-3.5-flash"
-      }
-    },
-    {
-      provider: "openrouter",
-      api_key: "",
-      override_params: { model: "openrouter/free" }
-    }
-  ]
-};
+const DEFAULT_TARGETS = [
+  { provider: 'deepseek', override_params: { model: 'deepseek-v4-flash' } },
+  { provider: 'google', override_params: { model: 'gemini-2.5-flash-lite' } },
+  { provider: 'google', override_params: { model: 'gemini-3.5-flash' } },
+  { provider: 'openrouter', override_params: { model: 'openrouter/free' } },
+];
 
-// 全局前置中间件：修复immutable headers报错
+const SEARCH_TARGETS = [
+  { provider: 'google', override_params: { model: 'gemini-2.5-flash-lite' } },
+  { provider: 'google', override_params: { model: 'gemini-3.5-flash' } },
+  { provider: 'deepseek', override_params: { model: 'deepseek-v4-flash' } },
+  { provider: 'openrouter', override_params: { model: 'openrouter/free' } },
+];
+
+function resolveApiKey(provider: string, env: any) {
+  if (provider === 'deepseek') return env.DP_KEY;
+  if (provider === 'google') return env.GEMINI_KEY;
+  if (provider === 'openrouter') return env.OPENROUTER_KEY;
+  return '';
+}
+
+// 全局前置中间件：修复immutable headers报错 + 根据请求的 model 字段选 targets 顺序
 app.use('*', async (c: Context, next) => {
   // 只有Cloudflare Worker运行时才执行注入逻辑
   if (runtime !== "workerd") {
     return next();
   }
 
-  // 填充后台配置的密钥
+  // 提前 clone 一份 body 读 model 字段，不影响原始请求体往后传递
+  let requestedModel = '';
+  try {
+    const cloned = c.req.raw.clone();
+    const parsed: any = await cloned.json();
+    requestedModel = parsed?.model || '';
+  } catch {
+    // 不是 JSON body，或者读取失败，忽略，走默认配置
+  }
+
+  const baseTargets = requestedModel === 'gemini-search' ? SEARCH_TARGETS : DEFAULT_TARGETS;
+
   const finalConfig = {
-    ...DEFAULT_CONFIG,
-    targets: [
-      {
-        ...DEFAULT_CONFIG.targets[0],
-        api_key: c.env.DP_KEY
-      },
-      {
-        ...DEFAULT_CONFIG.targets[1],
-        api_key: c.env.GEMINI_KEY
-      },
-      {
-        ...DEFAULT_CONFIG.targets[2],
-        api_key: c.env.GEMINI_KEY
-      },
-      {
-        ...DEFAULT_CONFIG.targets[3],
-        api_key: c.env.OPENROUTER_KEY
-      }
-    ]
+    retry: { attempts: 3 },
+    strategy: { mode: "fallback" },
+    targets: baseTargets.map((t) => ({
+      ...t,
+      api_key: resolveApiKey(t.provider, c.env),
+    })),
   };
 
   // 复制headers为可写实例
@@ -239,10 +228,14 @@ app.post(
 
 /**
  * POST route for '/v1/chat/completions'.
- * 对外的标准入口现在直接就是 agent 版本：自动支持 web_search 工具调用，
- * 这样任何标准 OpenAI 客户端（NextChat、Chatbox 等）不用关心 /v1/agent/chat 这件事。
+ * 对外的标准入口现在直接就是 agent 版本：自动支持 web_search 工具调用。
  */
 app.post('/v1/chat/completions', requestValidator, agentChatHandler);
+
+/**
+ * 兼容某些客户端（如 NextChat）误拼出 /v1/v1 路径的情况
+ */
+app.post('/v1/v1/chat/completions', agentChatHandler);
 
 /**
  * POST route for '/v1/agent/chat'.
