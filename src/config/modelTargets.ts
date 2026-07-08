@@ -143,25 +143,29 @@ export function imageConfig(env: Env) {
     retry: RETRY,
     targets: [
       {
+        // Gemini Flash Lite：多模态最稳，免费层
         provider: 'google',
         api_key: env.GEMINI_KEY,
         override_params: { model: 'gemini-2.5-flash-lite' },
       },
       {
+        // NIM Phi-4 Multimodal
         provider: 'openai',
         api_key: env.NVIDIA_NIM_KEY,
         custom_host: NIM_HOST,
         override_params: { model: 'microsoft/phi-4-multimodal-instruct' },
       },
       {
+        // OpenRouter Gemini 2.0 Flash 免费版
         provider: 'openrouter',
         api_key: env.OPENROUTER_KEY,
         override_params: { model: 'google/gemini-2.0-flash-exp:free' },
       },
       {
-        provider: 'google',
-        api_key: env.GEMINI_KEY,
-        override_params: { model: 'gemini-2.5-pro' },
+        // OpenRouter Llama 4 Maverick（支持视觉，免费）替换原来需要付费的 gemini-2.5-pro
+        provider: 'openrouter',
+        api_key: env.OPENROUTER_KEY,
+        override_params: { model: 'meta-llama/llama-4-maverick:free' },
       },
     ],
   }
