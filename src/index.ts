@@ -38,12 +38,48 @@ import { createCacheBackendsRedis } from './shared/services/cache'
 const app = new Hono()
 const runtime = getRuntimeKey()
 
+// ── CORS ──────────────────────────────────────────────────────────────
 app.use('*', cors({
   origin: '*',
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization', 'x-portkey-config'],
 }))
 
+// ── 鉴权：校验 Authorization Bearer token ────────────────────────────
+// 跳过 OPTIONS 预检请求（CORS 握手）和根路径健康检查。
+// 内部 Service Binding 调用（/v1/internal/*）也跳过，
+// 因为它是 Worker 自己调自己，不经过公网，不需要鉴权。
+app.use('*', async (c: Context, next) => {
+  const path = new URL(c.req.url).pathname
+  const method = c.req.method
+
+  // 跳过 OPTIONS 预检
+  if (method === 'OPTIONS') return next()
+
+  // 跳过根路径
+  if (path === '/') return next()
+
+  // 跳过内部调用路径
+  if (path.startsWith('/v1/internal/')) return next()
+
+  // 没有配置 GATEWAY_TOKEN 时跳过鉴权（方便调试）
+  const expectedToken = (c.env as any)?.GATEWAY_TOKEN
+  if (!expectedToken) return next()
+
+  // 校验 Authorization header
+  const authHeader = c.req.header('Authorization') ?? ''
+  const token = authHeader.startsWith('Bearer ')
+    ? authHeader.slice(7).trim()
+    : ''
+
+  if (token !== expectedToken) {
+    return c.json({ error: 'Unauthorized', message: 'Invalid or missing token' }, 401)
+  }
+
+  return next()
+})
+
+// ── 全局默认 Portkey config 注入 ─────────────────────────────────────
 app.use('*', async (c: Context, next) => {
   if (runtime !== 'workerd') return next()
 
@@ -54,17 +90,17 @@ app.use('*', async (c: Context, next) => {
       targets: [
         {
           provider: 'groq',
-          api_key: c.env.GROQ,
+          api_key: (c.env as any).GROQ,
           override_params: { model: 'llama-3.3-70b-versatile' },
         },
         {
           provider: 'google',
-          api_key: c.env.GEMINI_KEY,
+          api_key: (c.env as any).GEMINI_KEY,
           override_params: { model: 'gemini-2.5-flash-lite' },
         },
         {
           provider: 'openrouter',
-          api_key: c.env.OPENROUTER_KEY,
+          api_key: (c.env as any).OPENROUTER_KEY,
           override_params: { model: 'meta-llama/llama-3.3-70b-instruct:free' },
         },
       ],
@@ -96,7 +132,7 @@ if (runtime === 'node') {
       (c.res.status >= 400 || c.get('websocketError') === true)
     ) {
       const finalStatus = c.get('websocketError') === true ? 500 : c.res.status
-      const socket = c.env.incoming.socket
+      const socket = (c.env as any).incoming?.socket
       if (socket) {
         socket.write(`HTTP/1.1 ${finalStatus} ${c.res.statusText}\r\n\r\n`)
         socket.destroy()
@@ -126,7 +162,7 @@ app.post('/v1/messages/count_tokens', requestValidator, messagesCountTokensHandl
 // 内部专用：只给 callGatewaySelf 通过 Service Binding 调用
 app.post('/v1/internal/chat/completions', requestValidator, chatCompletionsHandler)
 
-// 对外标准入口：带意图路由
+// 对外标准入口：带模型别名路由
 app.post('/v1/chat/completions', requestValidator, agentChatHandler)
 
 // 兼容 NextChat 拼出 /v1/v1 的情况

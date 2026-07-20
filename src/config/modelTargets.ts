@@ -1,12 +1,3 @@
-// src/config/modelTargets.ts
-//
-// 模型别名系统（参考 OmniRoute 的 auto/* 设计）：
-//   auto/coding  → 代码专用链（Groq Qwen Coder → NIM Qwen3 480B → ...）
-//   auto/fast    → 速度优先链（Groq → Cerebras，只用延迟最低的两个）
-//   auto/cheap   → 免费优先链（只走 :free 模型）
-//   auto/search  → 直接走 Gemini Google Search（绕开 Portkey）
-//   其他任意值   → 走意图分类器决定
-
 export type Intent = 'chat' | 'reasoning' | 'code' | 'image'
 
 export type ModelAlias =
@@ -18,6 +9,8 @@ export type ModelAlias =
 
 const NIM_HOST = 'https://integrate.api.nvidia.com/v1'
 const CEREBRAS_HOST = 'https://api.cerebras.ai/v1'
+// Pollinations：不需要 key，完全免费，永不限速，作为最终兜底
+const POLLINATIONS_HOST = 'https://text.pollinations.ai/openai'
 
 const RETRY = {
   attempts: 1,
@@ -34,7 +27,6 @@ interface Env {
   [key: string]: string
 }
 
-// 识别模型别名，返回对应的 ModelAlias，识别不到返回 null
 export function detectModelAlias(model: string): ModelAlias {
   if (!model) return null
   const m = model.toLowerCase()
@@ -45,7 +37,6 @@ export function detectModelAlias(model: string): ModelAlias {
   return null
 }
 
-// ── 分类器 ────────────────────────────────────────────────────────────
 export function classifierConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
@@ -71,7 +62,6 @@ export function classifierConfig(env: Env) {
   }
 }
 
-// ── chat（日常对话，含 Google Search grounding）────────────────────────
 export function chatConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
@@ -113,9 +103,6 @@ export function chatConfig(env: Env) {
   }
 }
 
-// ── auto/fast：速度优先，只用延迟最低的两个 provider ─────────────────
-// Groq LPU 是最快的推理硬件，Cerebras 次之，两个都够快，
-// 快到任何一个可用时用户几乎感受不到延迟。
 export function fastConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
@@ -133,7 +120,6 @@ export function fastConfig(env: Env) {
         override_params: { model: 'gpt-oss-120b' },
       },
       {
-        // 两个都限速时才用 Google
         provider: 'google',
         api_key: env.GEMINI_KEY,
         override_params: { model: 'gemini-2.5-flash-lite' },
@@ -142,7 +128,6 @@ export function fastConfig(env: Env) {
   }
 }
 
-// ── auto/cheap：免费优先，只走 :free 模型，不消耗任何付费额度 ──────────
 export function cheapConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
@@ -164,18 +149,22 @@ export function cheapConfig(env: Env) {
         override_params: { model: 'deepseek/deepseek-r1:free' },
       },
       {
-        // Google 免费层：15 RPM，1500 RPD，算免费
         provider: 'google',
         api_key: env.GEMINI_KEY,
         override_params: { model: 'gemini-2.5-flash-lite' },
+      },
+      {
+        // Pollinations：完全免费，不需要 key，永不限速，最终兜底
+        // 支持 openai, claude, mistral, llama 等多个模型
+        provider: 'openai',
+        api_key: 'no-key-needed',
+        custom_host: POLLINATIONS_HOST,
+        override_params: { model: 'openai' },
       },
     ],
   }
 }
 
-// ── auto/coding / code：代码专用链 ──────────────────────────────────
-// 支持流式输出（Claude Code 需要），
-// 模型顺序：代码专用模型 → 通用大模型兜底
 export function codeConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
@@ -217,7 +206,6 @@ export function codeConfig(env: Env) {
   }
 }
 
-// ── reasoning ─────────────────────────────────────────────────────────
 export function reasoningConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
@@ -259,7 +247,6 @@ export function reasoningConfig(env: Env) {
   }
 }
 
-// ── image ─────────────────────────────────────────────────────────────
 export function imageConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
@@ -290,7 +277,6 @@ export function imageConfig(env: Env) {
   }
 }
 
-// 根据意图返回对应 config
 export function getIntentConfig(intent: Intent, env: Env) {
   switch (intent) {
     case 'reasoning': return reasoningConfig(env)
@@ -300,7 +286,6 @@ export function getIntentConfig(intent: Intent, env: Env) {
   }
 }
 
-// 根据模型别名返回对应 config
 export function getAliasConfig(alias: ModelAlias, env: Env) {
   switch (alias) {
     case 'auto/coding': return codeConfig(env)
