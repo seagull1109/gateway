@@ -1,22 +1,17 @@
 // src/handlers/agentChatHandler.ts
 //
-// 模型别名路由：
-//   auto/coding → codeConfig（支持流式）
-//   auto/fast   → fastConfig（速度优先）
-//   auto/cheap  → cheapConfig（免费优先，Pollinations 兜底）
-//   auto/search → 预留，暂未实现，走 chatConfig 降级
-//   其他/默认   → chatConfig
+// 纯模型别名路由，不做任何意图分类：
+//   auto/coding / coding → codeConfig（支持流式）
+//   auto/fast   / fast   → fastConfig（支持流式）
+//   auto/cheap  / cheap  → cheapConfig
+//   auto/search / search → 预留（暂走 chatConfig）
+//   其他/默认           → chatConfig
 //
-// 翻译请求：检测到关键词时跳过搜索，直接走 chatConfig
+// 翻译请求强制走 chatConfig（跳过可能的搜索逻辑，避免高频 429）
 
 import { callGatewaySelf } from '../core/callGatewaySelf'
 import { callGatewaySelfStream } from '../core/callGatewaySelfStream'
-import {
-  getAliasConfig,
-  detectModelAlias,
-  chatConfig,
-  codeConfig,
-} from '../config/modelTargets'
+import { detectModelAlias, getAliasConfig, chatConfig, codeConfig } from '../config/modelTargets'
 
 const DEFAULT_MAX_TOKENS = 2048
 
@@ -51,7 +46,7 @@ export async function agentChatHandler(c: any) {
 
   const isStreaming = body.stream === true
 
-  // ── 翻译请求 → chatConfig，不搜索 ────────────────────────────────
+  // ── 翻译请求：强制走 chatConfig，不搜索 ──────────────────────────
   if (isTranslationRequest(body.messages)) {
     const config = chatConfig(c.env)
     if (isStreaming) return callGatewaySelfStream(c, body, config)
@@ -62,10 +57,10 @@ export async function agentChatHandler(c: any) {
     }
   }
 
-  // ── 检测模型别名 ─────────────────────────────────────────────────
+  // ── 模型别名路由 ──────────────────────────────────────────────────
   const alias = detectModelAlias(body.model ?? '')
 
-  // auto/coding → codeConfig，支持流式
+  // auto/coding：代码专用，支持流式
   if (alias === 'auto/coding') {
     const config = codeConfig(c.env)
     if (isStreaming) return callGatewaySelfStream(c, body, config)
@@ -76,9 +71,18 @@ export async function agentChatHandler(c: any) {
     }
   }
 
-  // auto/fast / auto/cheap → 对应 config
-  // auto/search 暂未实现，降级到 chatConfig
-  // 无别名（默认）→ chatConfig
+  // auto/fast：速度优先，支持流式
+  if (alias === 'auto/fast') {
+    const config = getAliasConfig(alias, c.env)
+    if (isStreaming) return callGatewaySelfStream(c, body, config)
+    try {
+      return c.json(await callWithFallback(c, body, config))
+    } catch (err: any) {
+      return c.json({ error: true, message: err?.message ?? 'fast request failed' }, 500)
+    }
+  }
+
+  // auto/cheap / auto/search / 默认（无别名）→ 对应 config，不支持流式
   const config = alias ? getAliasConfig(alias, c.env) : chatConfig(c.env)
   if (isStreaming) return callGatewaySelfStream(c, body, config)
   try {
