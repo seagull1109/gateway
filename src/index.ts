@@ -28,6 +28,7 @@ import filesHandler from './handlers/filesHandler'
 import batchesHandler from './handlers/batchesHandler'
 import finetuneHandler from './handlers/finetuneHandler'
 import { messagesHandler } from './handlers/messagesHandler'
+import { messagesConfig } from './middlewares/messagesConfig'
 import { imageEditsHandler } from './handlers/imageEditsHandler'
 import { messagesCountTokensHandler } from './handlers/messagesCountTokensHandler'
 import modelResponsesHandler from './handlers/modelResponsesHandler'
@@ -156,7 +157,7 @@ app.onError((err, c) => {
   return c.json({ status: 'failure', message: err.message })
 })
 
-app.post('/v1/messages', requestValidator, messagesHandler)
+app.post('/v1/messages', requestValidator, messagesConfig, messagesHandler)
 app.post('/v1/messages/count_tokens', requestValidator, messagesCountTokensHandler)
 
 // 内部专用：只给 callGatewaySelf 通过 Service Binding 调用
