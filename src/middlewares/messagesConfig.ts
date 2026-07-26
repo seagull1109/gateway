@@ -24,7 +24,7 @@ export async function messagesConfig(c: Context, next: Function) {
         // DeepSeek 付费兜底
         provider: 'deepseek',
         api_key: (c.env as any).DP_KEY,
-        override_params: { model: 'deepseek-chat' },
+        override_params: { model: 'deepseek-v4-flash' },
       },
     ],
   }
