@@ -3,6 +3,7 @@ export type ModelAlias =
   | 'auto/fast'
   | 'auto/cheap'
   | 'auto/search'
+  | 'auto/image'
   | null
 
 const RETRY = {
@@ -25,6 +26,7 @@ export function detectModelAlias(model: string): ModelAlias {
   if (m === 'auto/fast'   || m === 'fast')   return 'auto/fast'
   if (m === 'auto/cheap'  || m === 'cheap')  return 'auto/cheap'
   if (m === 'auto/search' || m === 'search') return 'auto/search'
+  if (m === 'auto/image'  || m === 'image')  return 'auto/image'
   return null
 }
 
@@ -149,11 +151,47 @@ export function codeConfig(env: Env) {
   }
 }
 
+// ── auto/image：图片理解/多模态输入 ──────────────────────────────────
+// Gemini 多模态能力最稳定放第一，Groq Llama4 Maverick 支持图片，
+// OpenRouter 免费视觉模型兜底
+export function imageConfig(env: Env) {
+  return {
+    strategy: { mode: 'fallback' },
+    retry: RETRY,
+    targets: [
+      {
+        // Gemini：多模态最稳定，免费层
+        provider: 'google',
+        api_key: env.GEMINI_KEY,
+        override_params: { model: 'gemini-2.5-flash-lite' },
+      },
+      {
+        // Groq Llama4 Maverick：支持图片输入，速度快
+        provider: 'groq',
+        api_key: env.GROQ,
+        override_params: { model: 'meta-llama/llama-4-maverick-17b-128e-instruct' },
+      },
+      {
+        // OpenRouter 免费视觉模型
+        provider: 'openrouter',
+        api_key: env.OPENROUTER_KEY,
+        override_params: { model: 'google/gemini-2.0-flash-exp:free' },
+      },
+      {
+        provider: 'openrouter',
+        api_key: env.OPENROUTER_KEY,
+        override_params: { model: 'meta-llama/llama-4-maverick:free' },
+      },
+    ],
+  }
+}
+
 export function getAliasConfig(alias: ModelAlias, env: Env) {
   switch (alias) {
     case 'auto/coding': return codeConfig(env)
     case 'auto/fast':   return fastConfig(env)
     case 'auto/cheap':  return cheapConfig(env)
+    case 'auto/image':  return imageConfig(env)
     default:            return chatConfig(env)
   }
 }
