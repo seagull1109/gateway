@@ -30,6 +30,7 @@ export function detectModelAlias(model: string): ModelAlias {
   return null
 }
 
+// ── chat（默认，无别名时走这条）─────────────────────────────────────
 export function chatConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
@@ -46,9 +47,10 @@ export function chatConfig(env: Env) {
         override_params: { model: 'qwen/qwen3.6-27b' },
       },
       {
+        // OpenRouter 上的 gpt-oss-20b 免费版
         provider: 'openrouter',
         api_key: env.OPENROUTER_KEY,
-        override_params: { model: 'meta-llama/llama-3.3-70b-instruct:free' },
+        override_params: { model: 'openai/gpt-oss-20b:free' },
       },
       {
         provider: 'google',
@@ -64,12 +66,14 @@ export function chatConfig(env: Env) {
   }
 }
 
+// ── auto/fast：速度优先 ───────────────────────────────────────────────
 export function fastConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
     retry: RETRY,
     targets: [
       {
+        // gpt-oss-20b：Groq 上最快的轻量模型
         provider: 'groq',
         api_key: env.GROQ,
         override_params: { model: 'openai/gpt-oss-20b' },
@@ -88,27 +92,34 @@ export function fastConfig(env: Env) {
   }
 }
 
+// ── auto/cheap：免费优先（只走确认可用的 :free 模型）─────────────────
+// 注意：DeepSeek:free 和 Gemini:free 在 OpenRouter 上 2026年7月已下线
+// 目前确认可用的免费模型：gpt-oss-20b、llama-3.3-70b、nemotron-3-ultra
 export function cheapConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
     retry: RETRY,
     targets: [
       {
+        // OpenAI gpt-oss-20b 免费版：coding 性能最强的免费模型
+        provider: 'openrouter',
+        api_key: env.OPENROUTER_KEY,
+        override_params: { model: 'openai/gpt-oss-20b:free' },
+      },
+      {
+        // Llama 3.3 70B：最稳定的免费通用模型
         provider: 'openrouter',
         api_key: env.OPENROUTER_KEY,
         override_params: { model: 'meta-llama/llama-3.3-70b-instruct:free' },
       },
       {
+        // NVIDIA Nemotron 3 Ultra 550B MoE：免费旗舰，上下文 1M
         provider: 'openrouter',
         api_key: env.OPENROUTER_KEY,
-        override_params: { model: 'google/gemini-2.0-flash-exp:free' },
+        override_params: { model: 'nvidia/llama-3.3-nemotron-super-49b-v1:free' },
       },
       {
-        provider: 'openrouter',
-        api_key: env.OPENROUTER_KEY,
-        override_params: { model: 'deepseek/deepseek-r1:free' },
-      },
-      {
+        // Google Gemini 免费层兜底
         provider: 'google',
         api_key: env.GEMINI_KEY,
         override_params: { model: 'gemini-2.5-flash-lite' },
@@ -117,25 +128,35 @@ export function cheapConfig(env: Env) {
   }
 }
 
+// ── auto/coding：代码专用 ────────────────────────────────────────────
 export function codeConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
     retry: RETRY,
     targets: [
       {
+        // Groq Qwen2.5 Coder：代码专用 + LPU 加速
         provider: 'groq',
         api_key: env.GROQ,
         override_params: { model: 'qwen-2.5-coder-32b' },
       },
       {
+        // Groq gpt-oss-120b：通用大模型，代码能力也强
         provider: 'groq',
         api_key: env.GROQ,
         override_params: { model: 'openai/gpt-oss-120b' },
       },
       {
+        // OpenRouter Qwen3 Coder 免费版：1M 上下文，目前最强免费 coding 模型
         provider: 'openrouter',
         api_key: env.OPENROUTER_KEY,
-        override_params: { model: 'qwen/qwen-2.5-coder-32b-instruct:free' },
+        override_params: { model: 'qwen/qwen3-coder:free' },
+      },
+      {
+        // OpenRouter gpt-oss-20b 免费版：备用
+        provider: 'openrouter',
+        api_key: env.OPENROUTER_KEY,
+        override_params: { model: 'openai/gpt-oss-20b:free' },
       },
       {
         provider: 'google',
@@ -152,8 +173,8 @@ export function codeConfig(env: Env) {
 }
 
 // ── auto/image：图片理解/多模态输入 ──────────────────────────────────
-// Gemini 多模态能力最稳定放第一，Groq Llama4 Maverick 支持图片，
-// OpenRouter 免费视觉模型兜底
+// 注意：Groq llama-4-maverick 已废弃，改用 qwen3.6-27b（vision preview）
+// OpenRouter 上免费视觉模型：nemotron-nano-12b-vl:free
 export function imageConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
@@ -166,21 +187,22 @@ export function imageConfig(env: Env) {
         override_params: { model: 'gemini-2.5-flash-lite' },
       },
       {
-        // Groq Llama4 Maverick：支持图片输入，速度快
+        // Groq qwen3.6-27b：支持图片输入（vision preview）
         provider: 'groq',
         api_key: env.GROQ,
-        override_params: { model: 'meta-llama/llama-4-maverick-17b-128e-instruct' },
+        override_params: { model: 'qwen/qwen3.6-27b' },
       },
       {
         // OpenRouter 免费视觉模型
         provider: 'openrouter',
         api_key: env.OPENROUTER_KEY,
-        override_params: { model: 'google/gemini-2.0-flash-exp:free' },
+        override_params: { model: 'nvidia/nemotron-nano-12b-vl:free' },
       },
       {
-        provider: 'openrouter',
-        api_key: env.OPENROUTER_KEY,
-        override_params: { model: 'meta-llama/llama-4-maverick:free' },
+        // Gemini Pro：付费兜底，视觉能力最强
+        provider: 'google',
+        api_key: env.GEMINI_KEY,
+        override_params: { model: 'gemini-2.5-flash' },
       },
     ],
   }
