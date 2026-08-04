@@ -16,6 +16,7 @@ interface Env {
   GEMINI_KEY: string
   OPENROUTER_KEY: string
   DP_KEY: string
+  SILICONFLOW_KEY?: string
   [key: string]: string
 }
 
@@ -30,7 +31,6 @@ export function detectModelAlias(model: string): ModelAlias {
   return null
 }
 
-// ── chat（默认，无别名时走这条）─────────────────────────────────────
 export function chatConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
@@ -47,7 +47,6 @@ export function chatConfig(env: Env) {
         override_params: { model: 'qwen/qwen3.6-27b' },
       },
       {
-        // OpenRouter 上的 gpt-oss-20b 免费版
         provider: 'openrouter',
         api_key: env.OPENROUTER_KEY,
         override_params: { model: 'openai/gpt-oss-20b:free' },
@@ -66,60 +65,68 @@ export function chatConfig(env: Env) {
   }
 }
 
-// ── auto/fast：速度优先 ───────────────────────────────────────────────
+// ── auto/fast：专为高频翻译设计 ────────────────────────────────────────
+// 核心问题：Groq 两条目标共享同一个账号 RPM（30/min），并发翻译很快打爆。
+// 解法：
+//   1. Groq 只放一条（节省 RPM，避免误以为有两倍容量）
+//   2. 第二条换 SiliconFlow（国内访问快，DeepSeek V3 免费层）
+//   3. Google 作为第三选择
+//   4. DeepSeek 付费作为最终兜底，保证翻译永不报错
 export function fastConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
     retry: RETRY,
     targets: [
       {
-        // gpt-oss-20b：Groq 上最快的轻量模型
+        // Groq：最快，但 30 RPM 账号级限制，高并发容易触发
         provider: 'groq',
         api_key: env.GROQ,
         override_params: { model: 'openai/gpt-oss-20b' },
       },
       {
-        provider: 'groq',
-        api_key: env.GROQ,
-        override_params: { model: 'openai/gpt-oss-120b' },
+        // SiliconFlow：国内访问延迟低，DeepSeek V3 免费层
+        // 需要在 CF 里加 SILICONFLOW_KEY（去 siliconflow.cn 注册）
+        provider: 'siliconflow',
+        api_key: env.SILICONFLOW_KEY ?? '',
+        override_params: { model: 'deepseek-ai/DeepSeek-V3' },
       },
       {
+        // Gemini：15 RPM 偏低，但比直接报错强
         provider: 'google',
         api_key: env.GEMINI_KEY,
         override_params: { model: 'gemini-2.5-flash-lite' },
+      },
+      {
+        // DeepSeek 付费：永不限速，保证翻译不中断
+        provider: 'deepseek',
+        api_key: env.DP_KEY,
+        override_params: { model: 'deepseek-v4-flash' },
       },
     ],
   }
 }
 
-// ── auto/cheap：免费优先（只走确认可用的 :free 模型）─────────────────
-// 注意：DeepSeek:free 和 Gemini:free 在 OpenRouter 上 2026年7月已下线
-// 目前确认可用的免费模型：gpt-oss-20b、llama-3.3-70b、nemotron-3-ultra
 export function cheapConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
     retry: RETRY,
     targets: [
       {
-        // OpenAI gpt-oss-20b 免费版：coding 性能最强的免费模型
         provider: 'openrouter',
         api_key: env.OPENROUTER_KEY,
         override_params: { model: 'openai/gpt-oss-20b:free' },
       },
       {
-        // Llama 3.3 70B：最稳定的免费通用模型
         provider: 'openrouter',
         api_key: env.OPENROUTER_KEY,
         override_params: { model: 'meta-llama/llama-3.3-70b-instruct:free' },
       },
       {
-        // NVIDIA Nemotron 3 Ultra 550B MoE：免费旗舰，上下文 1M
         provider: 'openrouter',
         api_key: env.OPENROUTER_KEY,
         override_params: { model: 'nvidia/llama-3.3-nemotron-super-49b-v1:free' },
       },
       {
-        // Google Gemini 免费层兜底
         provider: 'google',
         api_key: env.GEMINI_KEY,
         override_params: { model: 'gemini-2.5-flash-lite' },
@@ -128,32 +135,27 @@ export function cheapConfig(env: Env) {
   }
 }
 
-// ── auto/coding：代码专用 ────────────────────────────────────────────
 export function codeConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
     retry: RETRY,
     targets: [
       {
-        // Groq Qwen2.5 Coder：代码专用 + LPU 加速
         provider: 'groq',
         api_key: env.GROQ,
         override_params: { model: 'qwen-2.5-coder-32b' },
       },
       {
-        // Groq gpt-oss-120b：通用大模型，代码能力也强
         provider: 'groq',
         api_key: env.GROQ,
         override_params: { model: 'openai/gpt-oss-120b' },
       },
       {
-        // OpenRouter Qwen3 Coder 免费版：1M 上下文，目前最强免费 coding 模型
         provider: 'openrouter',
         api_key: env.OPENROUTER_KEY,
         override_params: { model: 'qwen/qwen3-coder:free' },
       },
       {
-        // OpenRouter gpt-oss-20b 免费版：备用
         provider: 'openrouter',
         api_key: env.OPENROUTER_KEY,
         override_params: { model: 'openai/gpt-oss-20b:free' },
@@ -172,34 +174,27 @@ export function codeConfig(env: Env) {
   }
 }
 
-// ── auto/image：图片理解/多模态输入 ──────────────────────────────────
-// 注意：Groq llama-4-maverick 已废弃，改用 qwen3.6-27b（vision preview）
-// OpenRouter 上免费视觉模型：nemotron-nano-12b-vl:free
 export function imageConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
     retry: RETRY,
     targets: [
       {
-        // Gemini：多模态最稳定，免费层
         provider: 'google',
         api_key: env.GEMINI_KEY,
         override_params: { model: 'gemini-2.5-flash-lite' },
       },
       {
-        // Groq qwen3.6-27b：支持图片输入（vision preview）
         provider: 'groq',
         api_key: env.GROQ,
         override_params: { model: 'qwen/qwen3.6-27b' },
       },
       {
-        // OpenRouter 免费视觉模型
         provider: 'openrouter',
         api_key: env.OPENROUTER_KEY,
         override_params: { model: 'nvidia/nemotron-nano-12b-vl:free' },
       },
       {
-        // Gemini Pro：付费兜底，视觉能力最强
         provider: 'google',
         api_key: env.GEMINI_KEY,
         override_params: { model: 'gemini-2.5-flash' },
