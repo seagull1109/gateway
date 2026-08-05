@@ -16,7 +16,9 @@ interface Env {
   GEMINI_KEY: string
   OPENROUTER_KEY: string
   DP_KEY: string
-  SILICONFLOW_KEY?: string
+  SILICONFLOW_KEY: string
+  GLM_KEY: string
+  MISTRAL_KEY: string
   [key: string]: string
 }
 
@@ -31,6 +33,7 @@ export function detectModelAlias(model: string): ModelAlias {
   return null
 }
 
+// ── chat（默认）────────────────────────────────────────────────────────
 export function chatConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
@@ -44,7 +47,7 @@ export function chatConfig(env: Env) {
       {
         provider: 'groq',
         api_key: env.GROQ,
-        override_params: { model: 'openai/gpt-oss-120b' },
+        override_params: { model: 'qwen/qwen3.6-27b' },
       },
       {
         provider: 'openrouter',
@@ -65,52 +68,73 @@ export function chatConfig(env: Env) {
   }
 }
 
-// ── auto/fast：专为高频翻译设计 ────────────────────────────────────────
-// 核心问题：Groq 两条目标共享同一个账号 RPM（30/min），并发翻译很快打爆。
-// 解法：
-//   1. Groq 只放一条（节省 RPM，避免误以为有两倍容量）
-//   2. 第二条换 SiliconFlow（国内访问快，DeepSeek V3 免费层）
-//   3. Google 作为第三选择
-//   4. DeepSeek 付费作为最终兜底，保证翻译永不报错
+// ── auto/fast：高频翻译专用，loadbalance 均衡分流 ─────────────────────
+// 改用 loadbalance 而非 fallback，让流量按权重分散到多个 provider，
+// 避免把 Groq 30 RPM 瞬间打满——Groq(50%) + SiliconFlow(30%) + GLM(20%)
+// 三个 provider 同时接流量，等效 RPM 上限大幅提升。
+// DeepSeek 付费作为 fallback 兜底，保证翻译永不中断。
 export function fastConfig(env: Env) {
   return {
-    strategy: { mode: 'fallback' },
+    strategy: { mode: 'loadbalance' },
     retry: RETRY,
     targets: [
       {
-        // Groq：最快，但 30 RPM 账号级限制，高并发容易触发
         provider: 'groq',
         api_key: env.GROQ,
+        weight: 50,
         override_params: { model: 'openai/gpt-oss-20b' },
       },
       {
-        // SiliconFlow：国内访问延迟低，DeepSeek V3 免费层
-        // 需要在 CF 里加 SILICONFLOW_KEY（去 siliconflow.cn 注册）
+        // SiliconFlow：国内延迟低，DeepSeek V3 免费，权重 30%
         provider: 'siliconflow',
-        api_key: env.SILICONFLOW_KEY ?? '',
+        api_key: env.SILICONFLOW_KEY,
+        weight: 30,
         override_params: { model: 'deepseek-ai/DeepSeek-V3' },
       },
       {
-        // Gemini：15 RPM 偏低，但比直接报错强
-        provider: 'google',
-        api_key: env.GEMINI_KEY,
-        override_params: { model: 'gemini-2.5-flash-lite' },
+        // GLM-4-Flash：永久免费无上限，国内访问最快，权重 20%
+        provider: 'zhipu',
+        api_key: env.GLM_KEY,
+        weight: 20,
+        override_params: { model: 'glm-4-flash' },
       },
       {
-        // DeepSeek 付费：永不限速，保证翻译不中断
+        // DeepSeek 付费：三个都限速时的最终兜底
         provider: 'deepseek',
         api_key: env.DP_KEY,
+        weight: 0,
         override_params: { model: 'deepseek-v4-flash' },
       },
     ],
   }
 }
 
+// ── auto/cheap：免费优先，加入 Mistral 和 GLM ─────────────────────────
+// Mistral 每月 1B token 免费，GLM-4-Flash 永久免费无上限，
+// 两者加进来让免费额度大幅提升。
 export function cheapConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
     retry: RETRY,
     targets: [
+      {
+        // GLM-4-Flash：永久免费无上限，中文表现好，放第一
+        provider: 'zhipu',
+        api_key: env.GLM_KEY,
+        override_params: { model: 'glm-4-flash' },
+      },
+      {
+        // Mistral：每月 1B token 免费，欧洲 provider，多样性好
+        provider: 'mistral',
+        api_key: env.MISTRAL_KEY,
+        override_params: { model: 'mistral-small-latest' },
+      },
+      {
+        // SiliconFlow DeepSeek V3：免费层
+        provider: 'siliconflow',
+        api_key: env.SILICONFLOW_KEY,
+        override_params: { model: 'deepseek-ai/DeepSeek-V3' },
+      },
       {
         provider: 'openrouter',
         api_key: env.OPENROUTER_KEY,
@@ -135,6 +159,7 @@ export function cheapConfig(env: Env) {
   }
 }
 
+// ── auto/coding ───────────────────────────────────────────────────────
 export function codeConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
@@ -174,6 +199,7 @@ export function codeConfig(env: Env) {
   }
 }
 
+// ── auto/image ────────────────────────────────────────────────────────
 export function imageConfig(env: Env) {
   return {
     strategy: { mode: 'fallback' },
