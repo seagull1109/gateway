@@ -44,7 +44,7 @@ export function chatConfig(env: Env) {
       {
         provider: 'groq',
         api_key: env.GROQ,
-        override_params: { model: 'qwen/qwen3.6-27b' },
+        override_params: { model: 'openai/gpt-oss-120b' },
       },
       {
         provider: 'openrouter',
@@ -187,7 +187,7 @@ export function imageConfig(env: Env) {
       {
         provider: 'groq',
         api_key: env.GROQ,
-        override_params: { model: 'qwen/qwen3.6-27b' },
+        override_params: { model: 'openai/gpt-oss-120b' },
       },
       {
         provider: 'openrouter',
