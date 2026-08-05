@@ -75,7 +75,7 @@ export function chatConfig(env: Env) {
 // DeepSeek 付费作为 fallback 兜底，保证翻译永不中断。
 export function fastConfig(env: Env) {
   return {
-    strategy: { mode: 'fallback' },
+    strategy: { mode: 'loadbalance' },
     retry: RETRY,
     targets: [
       {
