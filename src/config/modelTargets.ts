@@ -75,7 +75,7 @@ export function chatConfig(env: Env) {
 // DeepSeek 付费作为 fallback 兜底，保证翻译永不中断。
 export function fastConfig(env: Env) {
   return {
-    strategy: { mode: 'loadbalance' },
+    strategy: { mode: 'fallback' },
     retry: RETRY,
     targets: [
       {
@@ -125,7 +125,7 @@ export function cheapConfig(env: Env) {
       },
       {
         // Mistral：每月 1B token 免费，欧洲 provider，多样性好
-        provider: 'mistral',
+        provider: 'mistral-ai',
         api_key: env.MISTRAL_KEY,
         override_params: { model: 'mistral-small-latest' },
       },
