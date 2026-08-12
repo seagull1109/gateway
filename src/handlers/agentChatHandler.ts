@@ -1,122 +1,179 @@
 // src/handlers/agentChatHandler.ts
 
-import { callGatewaySelf } from '../core/callGatewaySelf'
-import { callGatewaySelfStream } from '../core/callGatewaySelfStream'
-import { detectModelAlias, getAliasConfig, chatConfig, codeConfig } from '../config/modelTargets'
+import {
+  callGatewaySelf,
+} from '../core/callGatewaySelf'
+
+import {
+  callGatewaySelfStream,
+} from '../core/callGatewaySelfStream'
+
+import {
+  detectModelAlias,
+  getAliasConfig,
+  codeConfig,
+} from '../config/modelTargets'
 
 const DEFAULT_MAX_TOKENS = 2048
 
-// Groq 不支持超过 ~500 条消息，其他 provider 也有各自限制。
-// 裁剪策略：始终保留第一条（通常是 system 消息），再保留最近 N 条。
+// 暂时保持你原来的策略。
+// MCP 的 tool_calls / tool 消息裁剪问题后面单独处理。
 const MAX_MESSAGES = 50
 
 function trimMessages(messages: any[]): any[] {
-  if (messages.length <= MAX_MESSAGES) return messages
-  const systemMsg = messages[0]?.role === 'system' ? [messages[0]] : []
-  const recent = messages.slice(-(MAX_MESSAGES - systemMsg.length))
-  return [...systemMsg, ...recent]
-}
-
-function isTranslationRequest(messages: any[]): boolean {
-  const KEYWORDS = ['translate', 'translation', 'translator', '翻译', 'transla']
-  for (const msg of messages) {
-    const content = typeof msg.content === 'string' ? msg.content.toLowerCase() : ''
-    if (KEYWORDS.some((k) => content.includes(k))) return true
+  if (messages.length <= MAX_MESSAGES) {
+    return messages
   }
-  return false
+
+  const systemMsg =
+    messages[0]?.role === 'system'
+      ? [messages[0]]
+      : []
+
+  const recent = messages.slice(
+    -(MAX_MESSAGES - systemMsg.length),
+  )
+
+  return [
+    ...systemMsg,
+    ...recent,
+  ]
 }
 
-async function callWithFallback(c: any, body: any, config: object) {
+async function callGateway(
+  c: any,
+  body: any,
+  config: object,
+) {
   return callGatewaySelf(
     c,
     {
       ...body,
+
       stream: false,
-      max_tokens: body.max_tokens ?? DEFAULT_MAX_TOKENS,
-      messages: trimMessages(body.messages),
+
+      max_tokens:
+        body.max_tokens ??
+        DEFAULT_MAX_TOKENS,
+
+      messages: trimMessages(
+        body.messages,
+      ),
     },
-    config
+    config,
   )
 }
 
-export async function agentChatHandler(c: any) {
+export async function agentChatHandler(
+  c: any,
+) {
   let body: any
+
   try {
     body = await c.req.json()
   } catch {
-    return c.json({ error: 'invalid json body' }, 400)
-  }
-
-  if (!Array.isArray(body.messages) || body.messages.length === 0) {
-    return c.json({ error: 'messages must be a non-empty array' }, 400)
-  }
-
-  const isStreaming = body.stream === true
-
-  // ── 翻译请求 ────────────────────────────────────────────────────────
-  if (isTranslationRequest(body.messages)) {
-    const config = chatConfig(c.env)
-    if (isStreaming) {
-      return callGatewaySelfStream(
-        c,
-        { ...body, messages: trimMessages(body.messages) },
-        config
-      )
-    }
-    try {
-      return c.json(await callWithFallback(c, body, config))
-    } catch (err: any) {
-      return c.json({ error: true, message: err?.message ?? 'translation failed' }, 500)
-    }
-  }
-
-  // ── 模型别名路由 ─────────────────────────────────────────────────────
-  const alias = detectModelAlias(body.model ?? '')
-
-  if (alias === 'auto/coding') {
-    const config = codeConfig(c.env)
-    if (isStreaming) {
-      return callGatewaySelfStream(
-        c,
-        { ...body, messages: trimMessages(body.messages) },
-        config
-      )
-    }
-    try {
-      return c.json(await callWithFallback(c, body, config))
-    } catch (err: any) {
-      return c.json({ error: true, message: err?.message ?? 'coding request failed' }, 500)
-    }
-  }
-
-  if (alias === 'auto/fast') {
-    const config = getAliasConfig(alias, c.env)
-    if (isStreaming) {
-      return callGatewaySelfStream(
-        c,
-        { ...body, messages: trimMessages(body.messages) },
-        config
-      )
-    }
-    try {
-      return c.json(await callWithFallback(c, body, config))
-    } catch (err: any) {
-      return c.json({ error: true, message: err?.message ?? 'fast request failed' }, 500)
-    }
-  }
-
-  // auto/cheap / auto/search / 默认
-  const config = alias ? getAliasConfig(alias, c.env) : chatConfig(c.env)
-  if (isStreaming) {
-    return callGatewaySelfStream(
-      c,
-      { ...body, messages: trimMessages(body.messages) },
-      config
+    return c.json(
+      {
+        error: 'invalid json body',
+      },
+      400,
     )
   }
+
+  if (
+    !Array.isArray(body.messages) ||
+    body.messages.length === 0
+  ) {
+    return c.json(
+      {
+        error:
+          'messages must be a non-empty array',
+      },
+      400,
+    )
+  }
+
+  /*
+   * ============================================================
+   * 路由原则
+   * ============================================================
+   *
+   * Gateway 不再分析用户意图。
+   *
+   * 不再：
+   *   - 判断“翻译”
+   *   - 判断“搜索”
+   *   - 判断“coding”
+   *   - 调用 geminiSearch
+   *   - 根据 messages 内容自动切换模型
+   *
+   * 完全由客户端的 model 决定。
+   *
+   * 例如：
+   *
+   *   model = auto/cheap
+   *   model = auto/fast
+   *   model = auto/coding
+   *   model = auto/search
+   *   model = auto/image
+   */
+
+  const alias = detectModelAlias(
+    body.model ?? '',
+  )
+
+  let config: object
+
+  if (alias === 'auto/coding') {
+    config = codeConfig(c.env)
+  } else {
+    config = getAliasConfig(
+      alias,
+      c.env,
+    )
+  }
+
+  const payload = {
+    ...body,
+
+    messages: trimMessages(
+      body.messages,
+    ),
+  }
+
+  // ============================================================
+  // Streaming
+  // ============================================================
+
+  if (body.stream === true) {
+    return callGatewaySelfStream(
+      c,
+      payload,
+      config,
+    )
+  }
+
+  // ============================================================
+  // Non-streaming
+  // ============================================================
+
   try {
-    return c.json(await callWithFallback(c, body, config))
+    return c.json(
+      await callGateway(
+        c,
+        body,
+        config,
+      ),
+    )
   } catch (err: any) {
-    return c.json({ error: true, message: err?.message ?? 'request failed' }, 500)
+    return c.json(
+      {
+        error: true,
+        message:
+          err?.message ??
+          'request failed',
+      },
+      500,
+    )
   }
 }
