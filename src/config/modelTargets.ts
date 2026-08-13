@@ -5,6 +5,7 @@ export type ModelAlias =
   | 'auto/search'
   | 'auto/image'
   | 'auto/reasoning'
+  | 'auto/astrbot'
   | null
 
 const RETRY = {
@@ -24,6 +25,7 @@ function fallbackStrategy() {
 interface Env {
   GROQ: string
   GEMINI_KEY: string
+  GEMINI_KEY_ASTRBOT: string // AstrBot 专用，独立配额，不与其他 alias 共用
   OPENROUTER_KEY: string
   DP_KEY: string
   SILICONFLOW_KEY: string
@@ -41,6 +43,7 @@ export function detectModelAlias(model: string): ModelAlias {
   if (m === 'auto/search'    || m === 'search')    return 'auto/search'
   if (m === 'auto/image'     || m === 'image')     return 'auto/image'
   if (m === 'auto/reasoning' || m === 'reasoning') return 'auto/reasoning'
+  if (m === 'auto/astrbot'   || m === 'astrbot')   return 'auto/astrbot'
   return null
 }
 
@@ -280,6 +283,30 @@ export function imageConfig(env: Env) {
   }
 }
 
+// ── auto/astrbot：AstrBot 专用 Gemini 池 ─────────────────────────────
+// 只用 Gemini，不混其他 provider（tool calling 多轮场景要稳定优先）
+// 用独立的 GEMINI_KEY_ASTRBOT，配额与其他 alias 隔离
+// 先用已验证过的 2.5 系列模型名，新模型名(3.6/3.5/3.1 系列)确认 Portkey
+// 版本支持后再逐个加入，避免重演上次因新模型名导致的构建失败
+export function astrbotConfig(env: Env) {
+  return {
+    strategy: fallbackStrategy(),
+    retry: RETRY,
+    targets: [
+      {
+        provider: 'google',
+        api_key: env.GEMINI_KEY_ASTRBOT,
+        override_params: { model: 'gemini-2.5-flash' },
+      },
+      {
+        provider: 'google',
+        api_key: env.GEMINI_KEY_ASTRBOT,
+        override_params: { model: 'gemini-2.5-flash-lite' },
+      },
+    ],
+  }
+}
+
 export function getAliasConfig(alias: ModelAlias, env: Env) {
   switch (alias) {
     case 'auto/coding':    return codeConfig(env)
@@ -288,6 +315,7 @@ export function getAliasConfig(alias: ModelAlias, env: Env) {
     case 'auto/search':    return searchConfig(env)
     case 'auto/image':     return imageConfig(env)
     case 'auto/reasoning': return reasoningConfig(env)
+    case 'auto/astrbot':   return astrbotConfig(env)
     default:               return chatConfig(env)
   }
 }
