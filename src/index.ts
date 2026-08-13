@@ -384,7 +384,6 @@ app.post(
 
 // 调试入口
 app.post(
-  '/v1/agent/chat',
   agentChatHandler,
 )
 
