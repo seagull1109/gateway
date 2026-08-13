@@ -75,6 +75,8 @@ export function chatConfig(env: Env) {
 }
 
 // ── auto/fast：高频翻译/速度优先 ──────────────────────────────────────
+// SiliconFlow 换成永久免费的 Qwen3-8B，避免余额不足报 402
+// 付费的 DeepSeek-V3 改由 deepseek provider 做最终兜底
 export function fastConfig(env: Env) {
   return {
     strategy: fallbackStrategy(),
@@ -86,11 +88,13 @@ export function fastConfig(env: Env) {
         override_params: { model: 'openai/gpt-oss-20b' },
       },
       {
+        // SiliconFlow 永久免费模型，30 RPM，国内延迟低
         provider: 'siliconflow',
         api_key: env.SILICONFLOW_KEY,
-        override_params: { model: 'deepseek-ai/DeepSeek-V3' },
+        override_params: { model: 'Qwen/Qwen3-8B' },
       },
       {
+        // GLM-4-Flash：永久免费无上限
         provider: 'zhipu',
         api_key: env.GLM_KEY,
         override_params: { model: 'glm-4-flash' },
@@ -105,27 +109,28 @@ export function fastConfig(env: Env) {
 }
 
 // ── auto/cheap：免费优先 ──────────────────────────────────────────────
-// 改动：去掉 meta-llama:free（已下线），加 openrouter/free 自动路由兜底
-// openrouter/free 会自动从当前可用的免费模型里选，不需要维护具体模型名
 export function cheapConfig(env: Env) {
   return {
     strategy: fallbackStrategy(),
     retry: RETRY,
     targets: [
       {
+        // GLM-4-Flash：永久免费无上限
         provider: 'zhipu',
         api_key: env.GLM_KEY,
         override_params: { model: 'glm-4-flash' },
       },
       {
+        // Mistral：每月 1B token 免费
         provider: 'mistral-ai',
         api_key: env.MISTRAL_KEY,
         override_params: { model: 'mistral-small-latest' },
       },
       {
+        // SiliconFlow 永久免费
         provider: 'siliconflow',
         api_key: env.SILICONFLOW_KEY,
-        override_params: { model: 'deepseek-ai/DeepSeek-V3' },
+        override_params: { model: 'Qwen/Qwen3-8B' },
       },
       {
         provider: 'openrouter',
@@ -138,8 +143,7 @@ export function cheapConfig(env: Env) {
         override_params: { model: 'nvidia/llama-3.3-nemotron-super-49b-v1:free' },
       },
       {
-        // 自动路由兜底：OpenRouter 自动从当前可用免费模型里选，
-        // 不需要追着模型名单变动
+        // OpenRouter 自动路由：从当前可用免费模型里选
         provider: 'openrouter',
         api_key: env.OPENROUTER_KEY,
         override_params: { model: 'openrouter/free' },
@@ -153,9 +157,7 @@ export function cheapConfig(env: Env) {
   }
 }
 
-// ── auto/coding：代码专用 ────────────────────────────────────────────
-// 改动：去掉 qwen/qwen3-coder:free（OpenRouter 已下线），
-// 保留 Groq Qwen Coder（仍然可用）+ openrouter/free 兜底
+// ── auto/coding ───────────────────────────────────────────────────────
 export function codeConfig(env: Env) {
   return {
     strategy: fallbackStrategy(),
@@ -172,7 +174,6 @@ export function codeConfig(env: Env) {
         override_params: { model: 'openai/gpt-oss-120b' },
       },
       {
-        // openrouter/free 自动路由，避免硬编码已下线模型
         provider: 'openrouter',
         api_key: env.OPENROUTER_KEY,
         override_params: { model: 'openrouter/free' },
@@ -191,37 +192,34 @@ export function codeConfig(env: Env) {
   }
 }
 
-// ── auto/reasoning：推理/分析/数学专用 ───────────────────────────────
-// 新增：走 DeepSeek-R1 系列，专为需要深度推理的任务设计
-// Groq R1 蒸馏版（速度快）→ OpenRouter R1 免费版 → DeepSeek R1 付费版 → Gemini
+// ── auto/reasoning ────────────────────────────────────────────────────
+// SiliconFlow 换成永久免费的 R1 蒸馏版
 export function reasoningConfig(env: Env) {
   return {
     strategy: fallbackStrategy(),
     retry: RETRY,
     targets: [
       {
-        // Groq DeepSeek-R1 蒸馏版：R1 推理能力 + LPU 加速，最快
+        // Groq R1 蒸馏版：速度最快
         provider: 'groq',
         api_key: env.GROQ,
         override_params: { model: 'deepseek-r1-distill-llama-70b' },
       },
       {
-        // SiliconFlow DeepSeek-R1：国内访问快，免费层
+        // SiliconFlow 永久免费 R1 蒸馏版，国内延迟低
         provider: 'siliconflow',
         api_key: env.SILICONFLOW_KEY,
-        override_params: { model: 'deepseek-ai/DeepSeek-R1' },
+        override_params: { model: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B' },
       },
       {
-        // OpenRouter 自动路由：兜底
         provider: 'openrouter',
         api_key: env.OPENROUTER_KEY,
         override_params: { model: 'openrouter/free' },
       },
       {
-        // DeepSeek Reasoner：付费，推理能力最强
         provider: 'deepseek',
         api_key: env.DP_KEY,
-        override_params: { model: 'deepseek-reasoner' },
+        override_params: { model: 'deepseek-v4-flash' },
       },
       {
         provider: 'google',
