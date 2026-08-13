@@ -286,8 +286,10 @@ export function imageConfig(env: Env) {
 // ── auto/astrbot：AstrBot 专用 Gemini 池 ─────────────────────────────
 // 只用 Gemini，不混其他 provider（tool calling 多轮场景要稳定优先）
 // 用独立的 GEMINI_KEY_ASTRBOT，配额与其他 alias 隔离
-// 先用已验证过的 2.5 系列模型名，新模型名(3.6/3.5/3.1 系列)确认 Portkey
-// 版本支持后再逐个加入，避免重演上次因新模型名导致的构建失败
+// 注意：这是新申请的 key/项目，Google 现在不允许新 key 访问 2.5 系列模型
+// （2.5-flash / 2.5-flash-lite / 2.5-pro 对新 key 一律 404），必须用 3.x 系列
+// 3.6 Flash / 3.5 Flash-Lite 已废弃 temperature/top_p/top_k 采样参数，
+// 如果 AstrBot 请求带这几个字段导致 400，需要在 Gateway 层做参数清理
 export function astrbotConfig(env: Env) {
   return {
     strategy: fallbackStrategy(),
@@ -296,12 +298,17 @@ export function astrbotConfig(env: Env) {
       {
         provider: 'google',
         api_key: env.GEMINI_KEY_ASTRBOT,
-        override_params: { model: 'gemini-2.5-flash' },
+        override_params: { model: 'gemini-3.6-flash' },
       },
       {
         provider: 'google',
         api_key: env.GEMINI_KEY_ASTRBOT,
-        override_params: { model: 'gemini-2.5-flash-lite' },
+        override_params: { model: 'gemini-3.5-flash' },
+      },
+      {
+        provider: 'google',
+        api_key: env.GEMINI_KEY_ASTRBOT,
+        override_params: { model: 'gemini-3.1-flash-lite' },
       },
     ],
   }
