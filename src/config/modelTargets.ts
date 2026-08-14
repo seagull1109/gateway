@@ -11,6 +11,7 @@ export type ModelAlias =
 const RETRY = {
   attempts: 1,
   on_status_codes: [429, 500, 502, 503, 504],
+  use_retry_after_headers: true, // 429 时优先读 provider 的 Retry-After 头，比固定指数退避更精准
 }
 
 const FALLBACK_STATUS_CODES = [401, 403, 408, 429, 500, 502, 503, 504]
@@ -47,36 +48,6 @@ export function detectModelAlias(model: string): ModelAlias {
   return null
 }
 
-// ── chat（默认）────────────────────────────────────────────────────────
-export function chatConfig(env: Env) {
-  return {
-    strategy: fallbackStrategy(),
-    retry: RETRY,
-    targets: [
-      {
-        provider: 'groq',
-        api_key: env.GROQ,
-        override_params: { model: 'openai/gpt-oss-120b' },
-      },
-      {
-        provider: 'openrouter',
-        api_key: env.OPENROUTER_KEY,
-        override_params: { model: 'openai/gpt-oss-20b:free' },
-      },
-      {
-        provider: 'google',
-        api_key: env.GEMINI_KEY,
-        override_params: { model: 'gemini-2.5-flash-lite' },
-      },
-      {
-        provider: 'deepseek',
-        api_key: env.DP_KEY,
-        override_params: { model: 'deepseek-v4-flash' },
-      },
-    ],
-  }
-}
-
 // ── auto/fast：高频翻译/速度优先 ──────────────────────────────────────
 // SiliconFlow 换成永久免费的 Qwen3-8B，避免余额不足报 402
 // 付费的 DeepSeek-V3 改由 deepseek provider 做最终兜底
@@ -85,6 +56,12 @@ export function fastConfig(env: Env) {
     strategy: fallbackStrategy(),
     retry: RETRY,
     targets: [
+      {
+        // Hunyuan-MT-7B：SiliconFlow 上免费的翻译专用模型，优先试这个
+        provider: 'siliconflow',
+        api_key: env.SILICONFLOW_KEY,
+        override_params: { model: 'tencent/Hunyuan-MT-7B' },
+      },
       {
         provider: 'groq',
         api_key: env.GROQ,
@@ -154,7 +131,7 @@ export function cheapConfig(env: Env) {
       {
         provider: 'google',
         api_key: env.GEMINI_KEY,
-        override_params: { model: 'gemini-2.5-flash-lite' },
+        override_params: { model: 'gemini-3.1-flash-lite' },
       },
     ],
   }
@@ -189,7 +166,7 @@ export function codeConfig(env: Env) {
       {
         provider: 'google',
         api_key: env.GEMINI_KEY,
-        override_params: { model: 'gemini-2.5-flash-lite' },
+        override_params: { model: 'gemini-3.5-flash-lite' },
       },
     ],
   }
@@ -227,7 +204,7 @@ export function reasoningConfig(env: Env) {
       {
         provider: 'google',
         api_key: env.GEMINI_KEY,
-        override_params: { model: 'gemini-2.5-flash' },
+        override_params: { model: 'gemini-3.6-flash' },
       },
     ],
   }
@@ -242,7 +219,7 @@ export function searchConfig(env: Env) {
       {
         provider: 'google',
         api_key: env.GEMINI_KEY,
-        override_params: { model: 'gemini-2.5-flash-lite' },
+        override_params: { model: 'gemini-3.1-flash-lite' },
       },
       {
         provider: 'openrouter',
@@ -262,7 +239,7 @@ export function imageConfig(env: Env) {
       {
         provider: 'google',
         api_key: env.GEMINI_KEY,
-        override_params: { model: 'gemini-2.5-flash-lite' },
+        override_params: { model: 'gemini-3.5-flash-lite' },
       },
       {
         provider: 'groq',
@@ -277,7 +254,7 @@ export function imageConfig(env: Env) {
       {
         provider: 'google',
         api_key: env.GEMINI_KEY,
-        override_params: { model: 'gemini-2.5-flash' },
+        override_params: { model: 'gemini-3.6-flash' },
       },
     ],
   }
@@ -298,17 +275,22 @@ export function astrbotConfig(env: Env) {
       {
         provider: 'google',
         api_key: env.GEMINI_KEY_ASTRBOT,
+        override_params: { model: 'gemini-3.5-flash-lite' },
+      },
+      {
+        provider: 'google',
+        api_key: env.GEMINI_KEY_ASTRBOT,
+        override_params: { model: 'gemini-3.1-flash-lite' },
+      },
+      {
+        provider: 'google',
+        api_key: env.GEMINI_KEY_ASTRBOT,
         override_params: { model: 'gemini-3.6-flash' },
       },
       {
         provider: 'google',
         api_key: env.GEMINI_KEY_ASTRBOT,
         override_params: { model: 'gemini-3.5-flash' },
-      },
-      {
-        provider: 'google',
-        api_key: env.GEMINI_KEY_ASTRBOT,
-        override_params: { model: 'gemini-3.1-flash-lite' },
       },
     ],
   }
@@ -323,6 +305,6 @@ export function getAliasConfig(alias: ModelAlias, env: Env) {
     case 'auto/image':     return imageConfig(env)
     case 'auto/reasoning': return reasoningConfig(env)
     case 'auto/astrbot':   return astrbotConfig(env)
-    default:               return chatConfig(env)
+    default:               return fastConfig(env) // 没传 model 或传了未识别的别名时，兜底走 fast
   }
 }
