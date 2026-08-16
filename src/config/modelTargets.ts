@@ -446,15 +446,6 @@ export function freeConfig(env: Env) {
 
     targets: [
       {
-        // Venice: Uncensored (free)
-        provider: 'openrouter',
-        api_key: env.OPENROUTER_KEY,
-        override_params: {
-          model: 'cognitivecomputations/dolphin-mistral-24b-venice-edition:free',
-        },
-      },
-
-      {
         // Dolphin3.0 R1 Mistral 24B (free)
         provider: 'openrouter',
         api_key: env.OPENROUTER_KEY,
