@@ -6,6 +6,7 @@ export type ModelAlias =
   | 'auto/image'
   | 'auto/reasoning'
   | 'auto/astrbot'
+  | 'auto/free'
   | null
 
 const RETRY = {
@@ -68,6 +69,10 @@ export function detectModelAlias(model: string): ModelAlias {
     return 'auto/astrbot'
   }
 
+  if (m === 'auto/free' || m === 'free') {
+    return 'auto/free'
+  }
+
   return null
 }
 
@@ -81,6 +86,15 @@ export function fastConfig(env: Env) {
     retry: RETRY,
 
     targets: [
+      {
+        // Hunyuan-MT-7B：SiliconFlow 上免费的翻译专用模型，优先试这个
+        provider: 'siliconflow',
+        api_key: env.SILICONFLOW_KEY,
+        override_params: {
+          model: 'tencent/Hunyuan-MT-7B',
+        },
+      },
+
       {
         provider: 'groq',
         api_key: env.GROQ,
@@ -419,6 +433,76 @@ export function astrbotConfig(env: Env) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// auto/free：OpenRouter 免费模型池，按指定优先级排列
+//
+// 前 4 个是 :free 免费端点，最后 2 个是同系列的付费端点，
+// 免费额度耗尽/限流时才会兜到付费的，不是常态开销。
+// ─────────────────────────────────────────────────────────────
+
+export function freeConfig(env: Env) {
+  return {
+    strategy: fallbackStrategy(),
+    retry: RETRY,
+
+    targets: [
+      {
+        // Dolphin3.0 Mistral 24B (free)
+        provider: 'openrouter',
+        api_key: env.OPENROUTER_KEY,
+        override_params: {
+          model: 'cognitivecomputations/dolphin3.0-mistral-24b:free',
+        },
+      },
+
+      {
+        // Venice: Uncensored (free)
+        provider: 'openrouter',
+        api_key: env.OPENROUTER_KEY,
+        override_params: {
+          model: 'cognitivecomputations/dolphin-mistral-24b-venice-edition:free',
+        },
+      },
+
+      {
+        // Dolphin3.0 R1 Mistral 24B (free)
+        provider: 'openrouter',
+        api_key: env.OPENROUTER_KEY,
+        override_params: {
+          model: 'cognitivecomputations/dolphin3.0-r1-mistral-24b:free',
+        },
+      },
+
+      {
+        // Hermes 3 405B Instruct (free)
+        provider: 'openrouter',
+        api_key: env.OPENROUTER_KEY,
+        override_params: {
+          model: 'nousresearch/hermes-3-llama-3.1-405b:free',
+        },
+      },
+
+      {
+        // Hermes 4 70B（付费，免费额度用完后的兜底）
+        provider: 'openrouter',
+        api_key: env.OPENROUTER_KEY,
+        override_params: {
+          model: 'nousresearch/hermes-4-70b',
+        },
+      },
+
+      {
+        // Dolphin-Mistral-24B Venice Edition（付费，最终兜底）
+        provider: 'openrouter',
+        api_key: env.OPENROUTER_KEY,
+        override_params: {
+          model: 'cognitivecomputations/dolphin-mistral-24b-venice-edition',
+        },
+      },
+    ],
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 // 根据 alias 获取配置
 // ─────────────────────────────────────────────────────────────
 
@@ -444,6 +528,9 @@ export function getAliasConfig(alias: ModelAlias, env: Env) {
 
     case 'auto/astrbot':
       return astrbotConfig(env)
+
+    case 'auto/free':
+      return freeConfig(env)
 
     default:
       return fastConfig(env)
