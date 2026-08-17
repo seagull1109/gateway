@@ -446,34 +446,7 @@ export function freeConfig(env: Env) {
 
     targets: [
       {
-        // Dolphin3.0 R1 Mistral 24B (free)
-        provider: 'openrouter',
-        api_key: env.OPENROUTER_KEY,
-        override_params: {
-          model: 'cognitivecomputations/dolphin3.0-r1-mistral-24b:free',
-        },
-      },
-
-      {
-        // Hermes 3 405B Instruct (free)
-        provider: 'openrouter',
-        api_key: env.OPENROUTER_KEY,
-        override_params: {
-          model: 'nousresearch/hermes-3-llama-3.1-405b:free',
-        },
-      },
-
-      {
-        // Hermes 4 70B（付费，免费额度用完后的兜底）
-        provider: 'openrouter',
-        api_key: env.OPENROUTER_KEY,
-        override_params: {
-          model: 'nousresearch/hermes-4-70b',
-        },
-      },
-
-      {
-        // Dolphin-Mistral-24B Venice Edition（付费，最终兜底）
+        // Dolphin-Mistral-24B Venice Edition（付费）
         provider: 'openrouter',
         api_key: env.OPENROUTER_KEY,
         override_params: {
